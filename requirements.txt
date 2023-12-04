@@ -1,0 +1,14 @@
+boto3
+eccodes
+numpy
+netCDF4
+pytz
+nco
+gridpp
+pyproj
+pandas
+xarray
+scipy
+fsspec
+rioxarray
+flatten_json
