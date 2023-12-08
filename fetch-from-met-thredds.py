@@ -389,10 +389,6 @@ def convert_dataset(ds):
     # float32 air_temperature_pl(time, pressure, ensemble_member, y, x)
     # float32 air_temperature_2m(time, height1, y, x)
 
-    # print(ds)
-
-    offset = 0 if args.cycle in (0, 6, 12, 18) else 3
-
     d_data = ds[args.param]
     d_level = ds[args.level]
     d_time = ds["time"]
@@ -411,11 +407,6 @@ def convert_dataset(ds):
 
     for i, vt in enumerate(d_time):
         vt = datetime.datetime.fromtimestamp(vt).astimezone(pytz.utc)
-
-        vt -= datetime.timedelta(hours=offset)
-
-        # print(at, vt)
-        # print(d_data)
 
         # level and possible ensemble member dimension value is always
         # zero as each data set is queried separately
