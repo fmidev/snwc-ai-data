@@ -12,20 +12,42 @@ We have fetched primarily from arcus, and used thredds when arcus does not have 
 
 All data is stored as grib2. Thredds data is equivalent to arcus data except for mean sea level pressure, where it seems that some sort of post processing has been done.
 
-Currently (2023-12-04) s3 bucket has data for 2021-04 to 2021-12, but it is being updated. The aim is to provide data from 2021 to current date.
+Currently (2023-12-11) s3 bucket has data for 2021-04 to 2023-02, but it is being updated. The aim is to provide data from 2021 to current date.
 
 ## Parameters
 
-The following parameters are stored in this archive:
+The following parameters from MEPS dmo are stored in this archive:
 
 * wind gust speed (level: 10m above ground)
+  * grib name: fg
 * mixed layer depth (0m above ground)
-* pressure (mean sea level)
+  * grib name: mld
+* pressure (mean sea level, 0m above ground)
+  * grib name: pres
 * relative humidity (2m above ground, pressure levels 300,500,700,850,925,1000)
+  * grib name: r
 * temperature (0m above ground, 2m above ground, pressure levels 300,500,700,850,925,1000)
+  * grib name: t
 * u wind (10m above ground, pressure levels 300,500,700,850,925,1000)
+  * grib name: u
 * v wind (10m above ground, pressure levels 300,500,700,850,925,1000)
+  * grib name: v
 * geopotential (pressure levels 300,500,700,850,925,1000)
+  * grib name: z
+
+The following observation-corrected parameters are also stored:
+
+* wind gust speed (level: 10m above ground)
+  * grib name: fgcor
+* relative humidity (2m above ground)
+  * grib name: rcor
+* temperature (2m above ground)
+  * grib name: tcor
+* u wind (10m above ground)
+  * grib name: ucor
+* v wind (10m above ground)
+  * grib name: vcor
+
 
 ## How to access data
 
