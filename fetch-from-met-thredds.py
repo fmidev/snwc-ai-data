@@ -284,7 +284,7 @@ def create_url():
             args.year > 2022
             or (
                 args.year == 2022
-                and (args.month > 7 or (args.month == 7 and args.day >= 22))
+                and (args.month > 8 or (args.month == 8 and args.day >= 7))
             )
         )
     ):
@@ -395,8 +395,6 @@ def convert_dataset(ds):
     d_analysis_time = ds["forecast_reference_time"]
 
     shp = d_data.shape
-
-    # print(shp)
 
     nx = shp[-1]
     ny = shp[-2]
