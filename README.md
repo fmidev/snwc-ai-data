@@ -99,9 +99,21 @@ $ s3cmd ls s3://meps-ai-data/meps/2021/04/01/
 
 # Codes to download and preprocess MEPS data for AI training
 
-Code to add observation information to MEPS surface parameters: temperature, wind speed, wind gust and relative humidity (2m) using https://github.com/metno/gridpp   
+* fetch-from-arcus.py
+  * download grib files from MEtcoop arcus archive
+  * modify metadata so that grib files look like 0-hour forecasts
+* fetch-from-met-thredds.py
+  * download netcdf from met.no thredds archive and convert to grib
+  * modify metadata so that grib files look like 0-hour forecasts
+* gridpp_analysis.py
+  * correct meps forecasts with observations
+  * uses gridpp from met.no (https://github.com/metno/gridpp)
+* verify.sh
+  * script to verify that the archive has all the required files for one day
 
-## Usage
+
+## Usage examples
+
 * For temperature
 ```
 python gridpp_analysis.py --topography_data mnwc-Z-M2S2.grib2 --landseacover mnwc-LC-0TO1.grib2 --parameter_data mnwc-T-K.grib2 --output T-K.grib2 --parameter temperature
