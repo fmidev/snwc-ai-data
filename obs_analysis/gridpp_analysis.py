@@ -161,10 +161,13 @@ def read_grid(args):
         _, _, v_comp, _, _ = read_grib(args.v_component, False)
         u_comp = vals #vals = np.sqrt(vals ** 2 + wd ** 2)
 
-    # modify  geopotential to height and use just the first grib message, since the topo & lc fields are static
+    # scale geopotential to meters
     topo = topo / 9.81
-    topo = topo[0]
-    lc = lc[0]
+
+    if len(topo.shape[0]) > 2:
+        # use just the first grib message, since the topo & lc fields are static
+        topo = topo[0]
+        lc = lc[0]
 
     if args.parameter == "t":
         vals = vals - 273.15
@@ -522,7 +525,7 @@ def main():
         
         if args.parameter != "uv":
             output.append(tmp_output)
-        elif args.parameter == "uv":    
+        elif args.parameter == "uv":
             output_v.append(tmp_output_v)
             output.append(tmp_output)
 
@@ -531,11 +534,12 @@ def main():
     # Remove analysistime (leadtime=0), because correction is not made for that time
     #assert len(forecasttime) == len(output)
     #print("output:",output)
+
     if args.parameter != "uv":
-        write_grib(args, args.output, analysistime, forecasttime, output)
+        write_grib(args.output, analysistime, forecasttime, output, args.parameter_data)
     elif args.parameter == "uv":
-        write_grib(args, args.output, analysistime, forecasttime, output)
-        write_grib(args, args.output_v, analysistime, forecasttime, output_v)
+        write_grib(args.output, analysistime, forecasttime, output, args.parameter_data)
+        write_grib(args.output_v, analysistime, forecasttime, output_v, args.v_component)
 
     """
     import matplotlib.pylab as mpl
