@@ -97,7 +97,7 @@ $ s3cmd ls s3://meps-ai-data/meps/2021/04/01/
 2023-12-04 14:09     23373109  s3://meps-ai-data/meps/2021/04/01/20210401_z_isobaricInhPa_925.grib2
 ```
 
-# Codes to download and preprocess MEPS data for AI training
+## Codes to download and preprocess MEPS data for AI training
 
 * fetch-from-arcus.py
   * download grib files from MEtcoop arcus archive
@@ -119,9 +119,48 @@ $ s3cmd ls s3://meps-ai-data/meps/2021/04/01/
 python gridpp_analysis.py --topography_data mnwc-Z-M2S2.grib2 --landseacover mnwc-LC-0TO1.grib2 --parameter_data mnwc-T-K.grib2 --output T-K.grib2 --parameter temperature
 ```  
 
-## Authors
+# NetAtmo data
+
+NetAtmo temperature data between 2021-04-01 ... 2021-11-30 has been stored to s3 bucket netatmo-data. Access only with credentials.
+
+Data contains only temperature value, data is stored in daily files in parquet format.
+
+Data is partly quality controlled. Flag values are:
+
+* -1: No quality control check made
+*  0: Observation quality OK
+*  6: Observation rejected
+
+## How to access data
+
+```
+$ s3cmd ls s3://netatmo-data/2021/04/01/
+2023-12-15 14:25    104846019  s3://netatmo-data/2021/04/01/20210401_temperature.parquet
+2023-12-15 14:26    105042533  s3://netatmo-data/2021/04/01/20210402_temperature.parquet
+```
+
+Reading parquet data to pandas dataframe:
+
+```
+from pyarrow import fs
+import pyarrow.parquet as pq
+import os
+import pandas as pd
+
+s3 = fs.S3FileSystem(
+    access_key=os.environ["S3_ACCESS_KEY_ID"],
+    secret_key=os.environ["S3_SECRET_ACCESS_KEY"],
+    endpoint_override="lake.fmi.fi",
+)
+
+df = pq.read_table("netatmo-data/2021/04/01/20210401_temperature.parquet", filesystem=s3).to_pandas()
+
+print(df)
+```
+
+# Authors
 leila.hieta@fmi.fi mikko.partio@fmi.fi
 
-## Known issues, features and development ideas
+# Known issues, features and development ideas
  
  
