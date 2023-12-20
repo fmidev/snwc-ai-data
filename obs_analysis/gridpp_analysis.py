@@ -1,5 +1,5 @@
 import gridpp
-from plotutils import plot
+from plotutils import plot, plot_scatter
 from fileutils import write_grib, read_grib
 import numpy as np
 import eccodes as ecc
@@ -92,7 +92,12 @@ def read_netatmo_from_s3(args,fcstime): #tiuha_file):
         obs = pd.read_json(utfile_str)
         flattened_data = [flatten(feature) for feature in obs["features"]]
         obs = pd.DataFrame(flattened_data)
+        #print(obs.head(5))
+        #print(obs.columns)
         obs = obs[obs['properties_observedPropertyTitle'] == 'Air temperature'] # pressure and humidity also available
+        #print(obs['properties_qcDetails_flags_0_result'].sort_values().unique())
+        #print(obs['properties_qcDetails_flags_0_check'].sort_values().unique())
+        #print(len(obs))
         obs = obs[obs['properties_qcPassed'] == True]
         obs.drop(obs.columns[[0, 1, 5, 6, 7, 9, 10, 11, 12,14,15,16,17,18,19]], axis=1, inplace=True)
         obs = obs.rename(
@@ -146,6 +151,7 @@ def read_netatmo_from_s3(args,fcstime): #tiuha_file):
         # print("min NetAtmo obs:", min(obs.iloc[:, 5]))
         # print("max NetAtmo obs:", max(obs.iloc[:, 5]))
         the_obs = pd.concat([the_obs, obs], ignore_index=True)
+        #print("The obs ",len(the_obs))
     return the_obs
 
 
@@ -164,9 +170,10 @@ def read_grid(args):
     # scale geopotential to meters
     topo = topo / 9.81
 
-    if len(topo.shape[0]) > 2:
-        # use just the first grib message, since the topo & lc fields are static
+    if isinstance(topo, list):
         topo = topo[0]
+
+    if isinstance(lc, list):
         lc = lc[0]
 
     if args.parameter == "t":
@@ -212,8 +219,6 @@ def read_conventional_obs(args, fcstime, mnwc, analysistime):
         )
 
         resp = requests.get(url)
-        #print(resp.status_code)
-        #print(resp.json())
 
         testitmp = []
         testitmp2 = []
@@ -264,10 +269,14 @@ def detect_outliers_zscore(args, fcstime, obs_data):
     # remove outliers based on zscore with separate thresholds for upper and lower tail
     if args.parameter == "r":
         upper_threshold = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
-        lower_threshold = [-4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5]
+        #lower_threshold = [-4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5, -4.5]
+        # Different lower threshold for July since 0 values got through 20220720 data
+        lower_threshold = [-4.5, -4.5, -4.5, -4.5, -4.5, -4, -3, -3, -4.5, -4.5, -4.5, -4.5]
     elif args.parameter == "t":
-        lower_threshold = [-6, -6, -5, -4, -4, -4, -4, -4, -4, -5, -6, -6]
+        # updated thresholds since faulty values from Baltia got through 20220812 data
+        #lower_threshold = [-6, -6, -5, -4, -4, -4, -4, -4, -4, -5, -6, -6]
         upper_threshold = [2.5, 2.5, 2.5, 3, 4, 5, 5, 5, 3, 2.5, 2.5, 2.5]
+        lower_threshold = [-6, -6, -5, -4, -3.5, -3.5, -3.5, -3.5, -4, -5, -6, -6]
     elif args.parameter == "uv" or args.parameter == "fg":
         upper_threshold = [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7]
         lower_threshold = [-4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4]
@@ -295,21 +304,17 @@ def read_obs(args, fcstime, grid, lc, mnwc, analysistime):
     points = []
     for i in range(0, len(fcstime)):
         obs = read_conventional_obs(args, fcstime[i], mnwc, analysistime)
-
-        # for t there's netatmo obs available
-        # NetAtmo obs not used!!!
         """
         if args.parameter == "t":
             netatmo = read_netatmo_from_s3(args, fcstime[i])
+            print("got {} NetAtmo obs".format(len(netatmo)))
             print("min NetAtmo obs:", min(netatmo.iloc[:, 5]))
             print("max NetAtmo obs:", max(netatmo.iloc[:, 5]))
             if netatmo is not None:
                 obs = pd.concat((obs, netatmo))
         """
-        #print("length of all obs:", len(obs))
         outliers, obs = detect_outliers_zscore(args, fcstime[i], obs)
         print("removed " + str(len(outliers)) + " outliers from observations")
-        # print(outliers)
         print("min of QC obs:", min(obs.iloc[:, 5]))
         print("max of QC obs:", max(obs.iloc[:, 5]))
 
@@ -454,8 +459,7 @@ def main():
     elif args.parameter == "uv":
         grid, lons, lats, u_comp, v_comp, analysistime, forecasttime, lc, topo = read_grid(args)
         background = np.sqrt(u_comp ** 2 + v_comp ** 2) # ws
-        # calculate wind direction from u and v components
-        wd = 180 + np.arctan2(u_comp, v_comp) * 180 / np.pi
+        
     # create "zero" background for interpolating the bias
     background0 = copy.copy(background)
     background0[background0 != 0] = 0
@@ -470,24 +474,18 @@ def main():
     # Read observations from smartmet server
     # grib file contains 1day worth of data/parameter. MEPS control is run every 3h and 1h and 2h forecasts are used to produce analysis field
 
-    print(analysistime)
-    #print(forecasttime)
+    print("analysistime",analysistime)
     # obs is a list of obs for different forecast times
     points, obs = read_obs(args, forecasttime, grid, lc, background, analysistime)
-    #print("len points",len(points))
-    #print("len fcstime",len(obs))
-       
     ot = time.time()
     timedif = ot - et
     print("Reading OBS data takes:", round(timedif, 1), "seconds")
-    #print(obs[0])
     
     # Interpolate obs to background grid
     # if obs is just one row (missing) this is still done, but the diff fields are not used
     bias_obs = []
     for i in range(0, len(obs)):
         tmp_obs = obs[i]
-        #print(tmp_obs.shape[0])
         # interpolate background to obs points
         tmp_bg_point = gridpp.nearest(grid, points[i], background[i])
         tmp_obs['bias'] = tmp_bg_point - tmp_obs['obs_value']
@@ -503,6 +501,8 @@ def main():
     # and convert parameter to T-K or RH-0TO1
     output = []
     output_v = []
+    output_u = []
+
     for j in range(0, len(diff)):
         #print(obs[j].shape[0])
         if obs[j].shape[0] == 1: # just one row of obs == missing obs
@@ -515,9 +515,10 @@ def main():
             tmp_output = tmp_output / 100
         elif args.parameter == "uv":
             tmp_output = np.clip(tmp_output, 0, 38)  # max ws same as in oper qc: 38m/s
-            # calculate u and v components from ws and wd
-            tmp_output_v = tmp_output * np.sin(wd[j] * np.pi / 180) # v-vector
-            tmp_output = tmp_output * np.cos(wd[j] * np.pi / 180) # u-vector
+            # calculate corrected U and V components from correceted ws and original wd
+            wd_met = (270-np.arctan2(v_comp[j],u_comp[j])*180/np.pi) % 360 
+            tmp_output_u = -tmp_output*np.sin(wd_met*np.pi/180) 
+            tmp_output_v = -tmp_output*np.cos(wd_met*np.pi/180) 
         elif args.parameter == "fg":
             tmp_output = np.clip(tmp_output, 0, 50)
         else: # temperature
@@ -526,48 +527,29 @@ def main():
         if args.parameter != "uv":
             output.append(tmp_output)
         elif args.parameter == "uv":
-            output_v.append(tmp_output_v)
-            output.append(tmp_output)
+            output.append(tmp_output) # corrected wind speed
+            output_v.append(tmp_output_v) 
+            output_u.append(tmp_output_u)
 
 
     #print("Interpolating forecasts takes:", round(timedif, 1), "seconds")
-    # Remove analysistime (leadtime=0), because correction is not made for that time
     #assert len(forecasttime) == len(output)
-    #print("output:",output)
 
     if args.parameter != "uv":
         write_grib(args.output, analysistime, forecasttime, output, args.parameter_data)
     elif args.parameter == "uv":
-        write_grib(args.output, analysistime, forecasttime, output, args.parameter_data)
+        write_grib(args.output, analysistime, forecasttime, output_u, args.parameter_data)
         write_grib(args.output_v, analysistime, forecasttime, output_v, args.v_component)
 
-    """
-    import matplotlib.pylab as mpl
+    if args.plot and args.parameter != "uv":
+        plot(grid, points, obs, background, output, diff, lons, lats, args.parameter ,analysistime)
+        plot_scatter(grid, points, obs, background, output, args.parameter, analysistime)
+    elif args.plot and args.parameter == "uv":
+        plot(grid, points, obs, u_comp, output_u, diff, lons, lats, "u", analysistime)
+        plot(grid, points, obs, v_comp, output_v, diff, lons, lats, "v", analysistime)
+        plot_scatter(grid, points, obs, background, output, args.parameter, analysistime)
 
-    # plot diff
-    for j in range(0,len(diff)):
-        vmin = -5
-        vmax = 5
-        if args.parameter == "r":
-             vmin, vmax = -50, 50
-        mpl.pcolormesh(lons, lats, diff[j], cmap="RdBu_r", vmin=vmin, vmax=vmax)
-        mpl.xlim(0, 35)
-        mpl.ylim(55, 75)
-        mpl.gca().set_aspect(2)
-        mpl.savefig('diff' + args.parameter + str(j) + '.png')
-        #mpl.show()
-    for k in range(0,len(output)):
-        vmin = np.min(output[k])
-        vmax = np.max(output[k])
-        mpl.pcolormesh(lons, lats, output[k], cmap="RdBu_r", vmin=vmin, vmax=vmax)
-        mpl.xlim(0, 35)
-        mpl.ylim(55, 75)
-        mpl.gca().set_aspect(2)
-        mpl.savefig('output' + args.parameter + str(k) + '.png')
-        #mpl.show()
-    """
-    if args.plot:
-        plot(obs, background, output, diff, lons, lats, args)
+
 
 if __name__ == "__main__":
     main()

@@ -10,25 +10,24 @@ echo $parameter # t=temperature, r=humidity, uv=windspeed, fg=gust
 year=${timedate:0:4}
 month=${timedate:4:2}
 day=${timedate:6:2}
-#wrkdir=/home/hietal/Desktop/Python_projects/dev-snwc-ai
-wrkdir=/home/users/hietal/statcal/python_projects/snwc-ai-data/obs_analysis
+wrkdir=/home/hietal/Desktop/Python_projects/snwc-ai-data/obs_analysis
 cd $wrkdir
 pwd
 start_time=$(date +%s)
 
 if [ "$parameter" == "t" ]; then
   s3cmd get s3://meps-ai-data/meps/"$year"/"$month"/"$day"/"$timedate"_t_heightAboveGround_2.grib2
-  python3.9 "$wrkdir"/gridpp_analysis.py --topography_data Z-M2S2.grib2 --landseacover LC-0TO1.grib2 --parameter_data "$timedate"_t_heightAboveGround_2.grib2 --output poista_T2.grib2 --parameter t
+  python3 "$wrkdir"/gridpp_analysis.py --topography_data  s3://meps-ai-data/meps/const/z_heightAboveGround_0.grib2 --landseacover s3://meps-ai-data/meps/const/lsm_heightAboveGround_0.grib2 --parameter_data "$timedate"_t_heightAboveGround_2.grib2 --output poista_T2.grib2 --parameter t 
 elif [ "$parameter" == "uv" ]; then
   s3cmd get s3://meps-ai-data/meps/"$year"/"$month"/"$day"/"$timedate"_u_heightAboveGround_10.grib2
   s3cmd get s3://meps-ai-data/meps/"$year"/"$month"/"$day"/"$timedate"_v_heightAboveGround_10.grib2
-  python3.9 "$wrkdir"/gridpp_analysis.py --topography_data Z-M2S2.grib2 --landseacover LC-0TO1.grib2 --parameter_data "$timedate"_u_heightAboveGround_10.grib2 --v_component "$timedate"_v_heightAboveGround_10.grib2 --output poista_U.grib2 --output_v poista_V.grib2 --parameter uv
+  python3 "$wrkdir"/gridpp_analysis.py --topography_data s3://meps-ai-data/meps/const/z_heightAboveGround_0.grib2 --landseacover s3://meps-ai-data/meps/const/lsm_heightAboveGround_0.grib2 --parameter_data "$timedate"_u_heightAboveGround_10.grib2 --v_component "$timedate"_v_heightAboveGround_10.grib2 --output poista_U.grib2 --output_v poista_V.grib2 --parameter uv 
 elif [ "$parameter" == "fg" ]; then
   s3cmd get s3://meps-ai-data/meps/"$year"/"$month"/"$day"/"$timedate"_fg_heightAboveGround_10.grib2
-  python3.9 "$wrkdir"/gridpp_analysis.py --topography_data Z-M2S2.grib2 --landseacover LC-0TO1.grib2 --parameter_data "$timedate"_fg_heightAboveGround_10.grib2 --output poista_WG.grib2 --parameter fg
+  python3 "$wrkdir"/gridpp_analysis.py --topography_data s3://meps-ai-data/meps/const/z_heightAboveGround_0.grib2 --landseacover s3://meps-ai-data/meps/const/lsm_heightAboveGround_0.grib2 --parameter_data "$timedate"_fg_heightAboveGround_10.grib2 --output poista_WG.grib2 --parameter fg --plot
 elif [ "$parameter" == "r" ]; then
   s3cmd get s3://meps-ai-data/meps/"$year"/"$month"/"$day"/"$timedate"_r_heightAboveGround_2.grib2
-  python3.9 "$wrkdir"/gridpp_analysis.py --topography_data Z-M2S2.grib2 --landseacover LC-0TO1.grib2 --parameter_data "$timedate"_r_heightAboveGround_2.grib2 --output poista_RH.grib2 --parameter r
+  python3 "$wrkdir"/gridpp_analysis.py --topography_data s3://meps-ai-data/meps/const/z_heightAboveGround_0.grib2 --landseacover s3://meps-ai-data/meps/const/lsm_heightAboveGround_0.grib2 --parameter_data "$timedate"_r_heightAboveGround_2.grib2 --output poista_RH.grib2 --parameter r --plot
 else
   echo "parameter not found"
   exit 1
