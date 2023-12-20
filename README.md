@@ -128,7 +128,7 @@ Data contains only temperature value, data is stored in daily files in parquet f
 Data is partly quality controlled. Flag values are:
 
 * -1: No quality control check made
-*  0: Observation quality OK
+*  1: Observation quality OK
 *  6: Observation rejected
 
 ## How to access data
