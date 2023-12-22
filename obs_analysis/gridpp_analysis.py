@@ -1,5 +1,4 @@
 import gridpp
-from plotutils import plot, plot_scatter
 from fileutils import write_grib, read_grib
 import numpy as np
 import eccodes as ecc
@@ -541,13 +540,16 @@ def main():
         write_grib(args.output, analysistime, forecasttime, output_u, args.parameter_data)
         write_grib(args.output_v, analysistime, forecasttime, output_v, args.v_component)
 
-    if args.plot and args.parameter != "uv":
-        plot(grid, points, obs, background, output, diff, lons, lats, args.parameter ,analysistime)
-        plot_scatter(grid, points, obs, background, output, args.parameter, analysistime)
-    elif args.plot and args.parameter == "uv":
-        plot(grid, points, obs, u_comp, output_u, diff, lons, lats, "u", analysistime)
-        plot(grid, points, obs, v_comp, output_v, diff, lons, lats, "v", analysistime)
-        plot_scatter(grid, points, obs, background, output, args.parameter, analysistime)
+    if args.plot:
+        from plotutils import plot, plot_scatter
+
+        if args.parameter != "uv":
+            plot(grid, points, obs, background, output, diff, lons, lats, args.parameter ,analysistime)
+            plot_scatter(grid, points, obs, background, output, args.parameter, analysistime)
+        elif args.plot and args.parameter == "uv":
+            plot(grid, points, obs, u_comp, output_u, diff, lons, lats, "u", analysistime)
+            plot(grid, points, obs, v_comp, output_v, diff, lons, lats, "v", analysistime)
+            plot_scatter(grid, points, obs, background, output, args.parameter, analysistime)
 
 
 
