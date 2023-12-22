@@ -12,3 +12,5 @@ scipy
 fsspec
 rioxarray
 flatten_json
+requests
+s3fs
