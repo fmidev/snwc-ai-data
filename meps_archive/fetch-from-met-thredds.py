@@ -219,6 +219,7 @@ def level_type_to_id(level_type):
         "height0": 103,
         "height1": 103,
         "height2": 103,
+        "height6": 103,
         "height7": 103,
     }
 
@@ -264,17 +265,14 @@ def common_param_name(param):
 def common_level_name(level):
     if level == "pressure":
         return "isobaricInhPa"
-    if level in ("height0", "height1", "height2", "height7"):
+    if level in ("height0", "height1", "height2", "height6", "height7"):
         return "heightAboveGround"
     if level == "height_above_msl":
         return "heightAboveSea"
 
 
-def create_url():
-    ni = 948
-    nj = 1068
+def get_dodsname():
 
-    archive = "meps25epsarchive"
     dodsname = "meps_lagged_6_h_subset_2_5km"
     no_member = False
 
@@ -290,6 +288,23 @@ def create_url():
     ):
         dodsname = "meps_det_2_5km"
         no_member = True
+
+    if args.use_deterministic_file or (
+        args.perturbation_number == 0 and args.year >= 2024
+    ):
+        dodsname = "meps_det_pl" if args.level == "pressure" else "meps_det_sfc"
+        no_member = True
+
+    return dodsname, no_member
+
+
+def create_url():
+    ni = 948
+    nj = 1068
+
+    archive = "meps25epsarchive"
+
+    dodsname, no_member = get_dodsname()
 
     # [start:stride:stop]
     coord = (
@@ -314,6 +329,7 @@ def create_url():
             for lt in args.leadtimes:
                 yield "time[{}:1:{}]".format(lt, lt), lt, lt
 
+    filetype = "nc" if args.year < 2024 else "ncml"
     for time, lt_b, lt_e in get_time():
         # for i, lt in enumerate(args.leadtimes):
         # time = "time[{}:1:{}]".format(lt, lt)
@@ -335,7 +351,7 @@ def create_url():
                 )
                 memb = ",ensemble_member[{}:1:{}]".format(member, member)
 
-            url = "https://thredds.met.no/thredds/dodsC/{}/{}/{:02d}/{:02d}/{}_{}{:02d}{:02d}T{:02d}Z.nc?forecast_reference_time,projection_lambert,{},{}{},{},{}".format(
+            url = "https://thredds.met.no/thredds/dodsC/{}/{}/{:02d}/{:02d}/{}_{}{:02d}{:02d}T{:02d}Z.{}?forecast_reference_time,projection_lambert,{},{}{},{},{}".format(
                 archive,
                 args.year,
                 args.month,
@@ -345,6 +361,7 @@ def create_url():
                 args.month,
                 args.day,
                 cycle,
+                filetype,
                 coord,
                 lev,
                 memb,
@@ -404,7 +421,7 @@ def convert_dataset(ds):
     at = datetime.datetime.fromtimestamp(int(d_analysis_time[0])).astimezone(pytz.utc)
 
     for i, vt in enumerate(d_time):
-        vt = datetime.datetime.fromtimestamp(vt).astimezone(pytz.utc)
+        vt = datetime.datetime.fromtimestamp(int(vt)).astimezone(pytz.utc)
 
         # level and possible ensemble member dimension value is always
         # zero as each data set is queried separately
