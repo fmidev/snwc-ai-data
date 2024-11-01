@@ -276,6 +276,11 @@ def get_dodsname():
     dodsname = "meps_lagged_6_h_subset_2_5km"
     no_member = False
 
+    if args.year == 2020 and (args.month == 1 or (args.month == 2 and args.day < 5)):
+        raise Exception(
+            "Data at this data is not in MEPS2500D domain; try to start with 2020-02-05"
+        )
+
     if args.use_deterministic_file or (
         args.perturbation_number == 0
         and (
@@ -288,6 +293,8 @@ def get_dodsname():
     ):
         dodsname = "meps_det_2_5km"
         no_member = True
+
+        return dodsname, no_member
 
     if args.use_deterministic_file or (
         args.perturbation_number == 0 and args.year >= 2024
