@@ -21,7 +21,14 @@ def parse_args():
     parser.add_argument("--param", required=True, type=str)
     parser.add_argument("--level", required=True, type=str)
     parser.add_argument("--level-values", required=True, type=str)
-    parser.add_argument("--output-dir", required=False, type=str)
+    parser.add_argument("--output-dir", required=False, type=str, default="/tmp")
+    parser.add_argument("--output-filename", required=False, type=str, default=None)
+    parser.add_argument(
+        "--merge",
+        action="store_true",
+        default=False,
+        help="Merge all grib fields into one file",
+    )
     parser.add_argument("--perturbation-number", default=0, type=int)
     # parser.add_argument("--overwrite", action="store_true", default=False)
     args = parser.parse_args()
@@ -29,9 +36,8 @@ def parse_args():
     args.leadtimes = list(map(lambda x: int(x), args.leadtimes.split(",")))
     args.level_values = list(map(lambda x: int(x), args.level_values.split(",")))
 
-    if not args.output_dir:
-        args.output_dir = "/tmp"
-
+    if type(args.level_values) != list:
+        args.level_values = [args.level_values]
     return args
 
 
@@ -39,6 +45,7 @@ args = parse_args()
 
 
 def param_to_id(param):
+    # (discipline, parameterCategory, parameterNumber, typeOfStatisticalProcessing)
     params = {
         "t": (0, 0, 0, "NULL"),
         "fg": (0, 2, 22, 2),
@@ -48,6 +55,7 @@ def param_to_id(param):
         "u": (0, 2, 2, "NULL"),
         "v": (0, 2, 3, "NULL"),
         "z": (0, 3, 4, "NULL"),
+        "tcc": (0, 6, 192, "NULL"),
     }
 
     try:
@@ -188,10 +196,31 @@ def fetch():
     return myio
 
 
-def write(data):
-    for i in range(len(data)):
-        for j in range(len(data[i])):
-            filename = "{}/{}/{:02d}/{:02d}/raw/{}{:02d}{:02d}{:02d}_{}_{}_{}_mbr{}.grib2".format(
+def create_filename():
+
+    if args.output_filename is not None:
+        return "{}/{}".format(args.output_dir, args.output_filename)
+
+    if args.merge:
+        filename = (
+            "{}/{}/{:02d}/{:02d}/raw/{}{:02d}{:02d}{:02d}_{}_{}_mbr{}.grib2".format(
+                args.output_dir,
+                args.year,
+                args.month,
+                args.day,
+                args.year,
+                args.month,
+                args.day,
+                args.cycle,
+                args.param,
+                args.level,
+                args.perturbation_number,
+            )
+        )
+
+    else:
+        filename = (
+            "{}/{}/{:02d}/{:02d}/raw/{}{:02d}{:02d}{:02d}_{}_{}_{}_mbr{}.grib2".format(
                 args.output_dir,
                 args.year,
                 args.month,
@@ -205,11 +234,22 @@ def write(data):
                 args.level_values[j],
                 args.perturbation_number,
             )
+        )
+
+    return filename
+
+
+def write(data):
+
+    for i in range(len(data)):
+        for j in range(len(data[i])):
+            filename = create_filename()
 
             dirname = os.path.dirname(filename)
             os.makedirs(dirname, exist_ok=True)
 
-            with open(filename, "wb") as f:
+            open_mode = "ab" if args.merge else "wb"
+            with open(filename, open_mode) as f:
                 f.write(data[i][j].getbuffer())
 
             print(f"Wrote to file {filename}")
