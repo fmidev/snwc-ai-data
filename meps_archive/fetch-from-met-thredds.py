@@ -26,6 +26,13 @@ def parse_args():
     parser.add_argument("--level", required=True, type=str)
     parser.add_argument("--level-values", required=True, type=str)
     parser.add_argument("--output-dir", required=False, type=str, default="/tmp")
+    parser.add_argument("--output-filename", required=False, type=str, default=None)
+    parser.add_argument(
+        "--merge",
+        action="store_true",
+        default=False,
+        help="Merge all grib fields into one file",
+    )
     parser.add_argument("--perturbation-number", default=0, type=int)
     parser.add_argument("--use-deterministic-file", action="store_true", default=False)
     args = parser.parse_args()
@@ -33,6 +40,10 @@ def parse_args():
     args.leadtimes = list(map(lambda x: int(x), args.leadtimes.split(",")))
     args.leadtimes.sort()
     args.level_values = list(map(lambda x: int(x), args.level_values.split(",")))
+
+    if args.merge and args.output_filename is None:
+        print("Output filename must be specified when merging files")
+        sys.exit(1)
 
     global coalesce_times
 
@@ -207,6 +218,8 @@ def param_to_id(param):
         "wind_speed_of_gust": (11, 0, 2, 22, 2),
         "air_pressure_at_sea_level": (1, 0, 3, 0, None),
         "surface_air_pressure": (1, 0, 3, 0, None),
+        "specific_humidity_pl": (1, 0, 1, 0, None),
+        "upward_air_velocity_pl": (1, 0, 2, 9, None),
     }
 
     return params[param]
@@ -260,6 +273,8 @@ def common_param_name(param):
         return "fg"
     if param in ("surface_air_pressure", "air_pressure_at_sea_level"):
         return "pres"
+    if param in ("specific_humidity_pl", "specific_humidity_2m"):
+        return "q"
 
 
 def common_level_name(level):
@@ -503,29 +518,32 @@ def convert_to_grib(validtime, level_value, member_value, nx, ny, values):
         ecc.codes_set(grib, "dayOfEndOfOverallTimeInterval", day)
         ecc.codes_set(grib, "hourOfEndOfOverallTimeInterval", hour)
 
-    filename = (
-        "{}/{}/{:02d}/{:02d}/raw/{}{:02d}{:02d}{:02d}_{}_{}_{}_mbr{}.grib2".format(
-            args.output_dir,
-            year,
-            month,
-            day,
-            year,
-            month,
-            day,
-            hour,
-            common_param_name(args.param),
-            common_level_name(args.level),
-            level_value,
-            member_value,
+    if args.output_filename is None:
+        filename = (
+            "{}/{}/{:02d}/{:02d}/raw/{}{:02d}{:02d}{:02d}_{}_{}_{}_mbr{}.grib2".format(
+                args.output_dir,
+                year,
+                month,
+                day,
+                year,
+                month,
+                day,
+                hour,
+                common_param_name(args.param),
+                common_level_name(args.level),
+                level_value,
+                member_value,
+            )
         )
-    )
+    else:
+        filename = args.output_filename
 
     dirname = os.path.dirname(filename)
     os.makedirs(dirname, exist_ok=True)
 
-    with open(filename, "wb") as fp:
+    open_mode = "ab" if args.merge else "wb"
+    with open(filename, open_mode) as fp:
         ecc.codes_write(grib, fp)
-        print(f"Wrote file {filename} (size={fp.tell()})")
 
 
 datas = fetch_from_thredds()
