@@ -239,14 +239,11 @@ def level_type_to_id(level_type):
     return levels[level_type]
 
 
-def level_value_to_index(level, level_value, time):
+def level_value_to_index(level, level_value):
     if level == "pressure":
         if args.use_deterministic_file:
-            if time < 2024110409 or time > 2024110606:
-                # 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 400.0, 500.0, 700.0, 800.0, 850.0, 925.0, 1000.0
-                idx = [50, 100, 150, 200, 250, 300, 400, 500, 700, 800, 850, 925, 1000]
-            else:
-                idx = [300, 500, 700, 850, 925, 1000]
+            # 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 400.0, 500.0, 700.0, 800.0, 850.0, 925.0, 1000.0
+            idx = [50, 100, 150, 200, 250, 300, 400, 500, 700, 800, 850, 925, 1000]
         else:
             idx = [300, 500, 700, 850, 925, 1000]
 
@@ -359,15 +356,7 @@ def create_url():
         # for i, lt in enumerate(args.leadtimes):
         # time = "time[{}:1:{}]".format(lt, lt)
         for i, level_value in enumerate(args.level_values):
-            lev_index = level_value_to_index(
-                args.level,
-                level_value,
-                int(
-                    "{}{:02d}{:02d}{:02d}".format(
-                        args.year, args.month, args.day, args.cycle
-                    )
-                ),
-            )
+            lev_index = level_value_to_index(args.level, level_value)
             lev = "{}[{}:1:{}]".format(args.level, lev_index, lev_index)
 
             if no_member:
