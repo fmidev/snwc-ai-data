@@ -1,0 +1,231 @@
+from fileutils import write_grib, read_grib
+import numpy as np
+import eccodes as ecc
+import argparse
+import pandas as pd
+from scipy.ndimage import uniform_filter
+import xarray as xr
+import datetime 
+from datetime import timedelta
+from cc_plotting import plot_single_field, plot_single_border, plot_two_border
+#import cartopy.crs as ccrs
+#import cartopy.feature as cfeature
+#from mpl_toolkits.basemap import Basemap
+
+#warnings.filterwarnings("ignore")
+
+def parse_command_line():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--start", action="store", type=str, required=True)
+    parser.add_argument("--end", action="store", type=str, required=True)
+    parser.add_argument("--output", action="store", type=str, required=True)
+
+    args = parser.parse_args()
+    return args
+
+
+
+def read_grid(args):
+    """Top function to read "all" gridded data"""
+
+    lons, lats, vals, analysistime, forecasttime = read_grib(args.rh, True)
+    _, _, nl, _, _ = read_grib(args.nl, False) #, "/home/users/hietal/.s3cfg-arcus")
+    _, _, nm, _, _ = read_grib(args.nm, False, "/home/users/hietal/.s3cfg-arcus")
+    _, _, nh, _, _ = read_grib(args.nh, False) #, "/home/users/hietal/.s3cfg-arcus")
+
+    #if args.parameter == "r":
+    #    vals = vals * 100
+    return lons, lats, vals, analysistime, forecasttime, nl, nm, nh
+
+def read_zarr(filen):
+    storage_options = {
+        "anon": True,
+        "client_kwargs": {"endpoint_url": "https://lake.fmi.fi"},
+    }
+    ds = xr.open_zarr(filen, storage_options=storage_options)
+    return ds
+
+def read_arcus_daily(year, month, dd, timedate, param):
+    HH = ["00", "03", "06", "09", "12", "15", "18", "21"]
+    s3_arcus = "s3://calibration/MEPS_prod/{year}/{month}/{dd}/{hh}/mbr000/{ctype}_heightAboveGround_0_instant_{timedate}{hh}_mbr000.grib2"
+    #s3://calibration/MEPS_prod/2023/11/23/12/mbr000/hcc_heightAboveGround_0_instant_2023112312_mbr000.grib2
+    vals = []
+    for hh in HH:
+        s3_path = s3_arcus.format(year=year, month=month, dd=dd, hh=hh, ctype=param, timedate=timedate)
+        _, _, val, _, _ = read_grib(s3_path, False, "arcus")
+        # select only 3 first hours i.e. arrays
+        val = val[0:3]
+        vals.append(val)
+    vals = np.concatenate(vals, axis=0)
+    return vals
+
+def dummy_nwcsaf(x1,x2, missing=False):
+    shape = (24, 1069, 949)
+    missing_fraction = 0.1  
+    random_array = np.random.uniform(x1, x2, size=shape)
+    random_array = np.round(random_array).astype(int)
+    if missing:
+        missing_mask = np.random.rand(*shape) < missing_fraction
+        random_array = random_array.astype(float)
+        random_array[missing_mask] = np.nan
+    return random_array
+
+def main():
+    args = parse_command_line()
+    start = datetime.datetime.strptime(args.start, "%Y-%m-%d")
+    sY = start.strftime("%Y")
+    sM = start.strftime("%m")
+    sD = start.strftime("%d")
+    end = datetime.datetime.strptime(args.end, "%Y-%m-%d")
+    date_series = pd.date_range(start=args.start, end=args.end, freq='D')
+    # read srad data
+    sr = read_zarr("s3://ecmwf-ssrd-data/ssrd.zarr")
+    template = sr.copy(deep=True) # copy template for output data
+    template = template.drop_vars("ssrd").assign_coords(time=[])
+    template = template.load()
+    template.to_zarr(args.output, mode="w") 
+    y = template["y"].values
+    x = template["x"].values
+    # read clearsky data
+    cs = xr.open_zarr("clearsky.zarr")
+    # read nwcsaf data (effc, cttp, cmqc)
+    nwcsaf = read_zarr("s3://nwcsaf-archive-data/nwcsaf.zarr")
+    # s3 template
+    s3_rh = "s3://meps-ai-data/meps/{year}/{month}/{dd}/{timedate}_rcorr_heightAboveGround_2.grib2"
+    
+    # loop over the days
+    cloud = []
+    for day in date_series:
+        print(day)
+        year = day.strftime("%Y")
+        month = day.strftime("%m")
+        dd = day.strftime("%d")
+        timedate = f"{year}{month}{dd}"
+        xa_day = day.strftime("%Y-%m-%d")
+        # Replace the year for clearsky data (for 2023 months 4...9 only!)
+        date23 = day.replace(year=2023)
+        cs_day = date23.strftime("%Y-%m-%d")
+        # read meps rh (the whole day in one grib file)
+        s3_path = s3_rh.format(year=year, month=month, dd=dd, timedate=timedate)
+        lons, lats, rh, analysistime, forecasttime = read_grib(s3_path, True)
+        ## create dummy data for effc, cttp 
+        #effc = dummy_nwcsaf(0, 100)
+        #cttp = dummy_nwcsaf(-80, 0, True)
+        # read arcus data (nl, nm, nh) from control member 0-2h forecasts aggregated as daily values
+        nh = read_arcus_daily(year, month, dd, timedate, "hcc")
+        nm = read_arcus_daily(year, month, dd, timedate, "mcc")
+        nl = read_arcus_daily(year, month, dd, timedate, "lcc")
+        for hour in range(0, 24):
+            # create time for hourly data
+            timehour = day + timedelta(hours=hour)
+            nwcsaf1 = nwcsaf.sel(time=timehour)
+            effc_tmp = nwcsaf1["effective_cloudiness"].values * 100
+            # replace na's in effc_tmp with 0
+            effc_tmp[np.isnan(effc_tmp)] = 0
+            # copy effc_tmp field for plotting
+            effc_copy = effc_tmp.copy()
+            cttp_tmp = nwcsaf1["cloudtop_temperature"].values - 273.15
+            #plot_single_border(effc_tmp, lats, lons, "effc", timehour, 0, 100, 60, 70, 20, 33) 
+            #plot_single_field(cttp_tmp, "cttp", timehour, template, -80, 5)
+            nh_tmp = nh[hour] * 100
+            nm_tmp = nm[hour] * 100
+            nl_tmp = nl[hour] * 100
+            rh_tmp = rh[hour] * 100
+            avg1 = uniform_filter(effc_tmp, size=3, mode='reflect')#, cval=np.nan)
+            #plot_single_field(avg1, "avg1", timehour, template, 0, 100)
+            avg2 = uniform_filter(effc_tmp, size=7, mode='reflect') #, cval=np.nan)
+            #plot_single_field(avg2, "avg2", timehour, template, 0, 100)
+            if (day.month >= 10 or day.month <= 3): # correction for wintertime 
+                # create cloudmask based on cttp
+                effc_tmp[(np.isfinite(cttp_tmp)) & (effc_tmp == 0)] = 80
+                # average out the small gaps in data
+                effc_tmp[(effc_tmp <= 90) & (avg1 > 65)] = 90
+                effc_tmp[(effc_tmp <= 90) & (avg2 > 55)] = 90
+                # reduce cloud cover if just high level clouds
+                # if (effc <10  && rh >= 86 and (nl > 80 or cmqc == 24) {effc = 60 }
+                effc_tmp[(effc_tmp < 10) & (rh_tmp >= 86) & (nl_tmp > 80)] #or cmqc_tmp == 24)] = 60
+                # if (effc <=60  && rh >= 98 and (nl > 20 or cmqc == 24 ) {pilvi = 80 }  
+                effc_tmp[(effc_tmp <= 60) & (rh_tmp >= 98) & (nl_tmp > 20)] #or cmqc_tmp == 24)] = 80
+            elif (day.month >= 4 or day.month <= 9): # summer correction
+                # radiation parameters: short wave and clear sky 
+                sr1 = sr.sel(time=slice(xa_day, xa_day))
+                cs1 = cs.sel(time=slice(cs_day, cs_day))
+                sr_tmp1 = sr1["ssrd"].values
+                cs_tmp1 = cs1["clearsky"].values
+                sr_tmp = sr_tmp1[hour]
+                cs_tmp = cs_tmp1[hour]
+                # reduce if just high level clouds
+                effc_tmp[(effc_tmp > 50) & (nh_tmp > 50) & (nl_tmp < 20) & (nm_tmp < 20)] = 50
+                # average out the small gaps in data
+                effc_tmp[(effc_tmp <= 80) & (avg2 > 60)] = 60
+                effc_tmp[(effc_tmp <= 70) & (avg1 > 50)] = 70
+                # reduce cloud cover if cumulus in midday
+                if (hour >= 7 and hour < 17): 
+                    sr_ratio = np.full_like(sr_tmp, np.nan)
+                    # avoid divide by zero and only apply if srad is above 100 W/m2
+                    valid_mask = sr_tmp >= 100
+                    sr_ratio[valid_mask] = sr_tmp[valid_mask] / cs_tmp[valid_mask]
+                    effc_tmp[(sr_ratio >= 0.65) & (effc_tmp > 80)] = 80
+                    effc_tmp[(sr_ratio >= 0.75) & (effc_tmp > 50)] = 50
+            #plot_single_border(effc_tmp, lats, lons, "effc_pp", timehour, 0, 100, 60, 70, 20, 33)        
+            #plot_single_field(effc_tmp, "effc_pp", timehour, template, 0, 100)   
+            plot_two_border(effc_copy, effc_tmp, lats, lons, "effc", "effc_pp", timehour, 0, 100, 60, 70, 20, 33)
+            # data start time "reference time"
+            ref_time = datetime.datetime(int(sY), int(sM), int(sD), 0, 0, 0)
+            # time of the hourly data
+            timedd = datetime.datetime(int(year), int(month), int(dd), hour, 0, 0)
+            hourly_ds = xr.Dataset(
+                {
+                    "nwcsaf_pp": (("time", "y", "x"), effc_tmp[np.newaxis, ...]),
+                },
+                coords={
+                    "time": [timedd],
+                    "y": y,
+                    "x": x,
+                },
+            
+            )
+            hourly_ds["time"].attrs = {}  # Clear any residual attributes
+            hourly_ds["time"].encoding = {
+            "units": f"hours since {ref_time.isoformat()}",
+            "calendar": "proleptic_gregorian",
+            "dtype": "int64",  
+            }
+            
+            cloud.append(hourly_ds)
+     
+    combined_ds = xr.concat(cloud, dim="time", combine_attrs="override")
+    combined_ds["time"].encoding = {
+    "units": f"hours since {ref_time.isoformat()}",
+    "calendar": "proleptic_gregorian",
+    "dtype": "int64",
+    }
+    combined_ds["spatial_ref"] = xr.DataArray(
+    data=np.array(0),  
+    attrs={
+        "grid_mapping_name": "lambert_conformal_conic",
+        "standard_parallel": [30.0, 60.0],  # Example parallels
+        "longitude_of_central_meridian": -96.0,  # Central longitude
+        "latitude_of_projection_origin": 23.0,  # Projection origin
+        "false_easting": 0.0,  # False easting in projection units
+        "false_northing": 0.0,  # False northing in projection units
+        "semi_major_axis": 6378137.0,  # WGS84 ellipsoid parameters
+        "inverse_flattening": 298.257223563,
+        },
+    )
+    # Add the grid_mapping attribute to variable
+    combined_ds["nwcsaf_pp"].attrs["grid_mapping"] = "spatial_ref"
+    #combined_ds["nwcsaf_pp"].attrs["Variable"] = "nwcsaf_pp"
+    print(combined_ds["spatial_ref"])
+    print(combined_ds["nwcsaf_pp"].attrs)
+    print("Time values after concatenation:", combined_ds["time"].values)
+    # print keys and attributes
+    #print("keys",combined_ds.keys())
+    #print("attributes:", combined_ds["time"].attrs)
+    #print("encoding:",combined_ds["time"].encoding)
+
+    combined_ds.to_zarr(args.output, mode="w")
+   
+    
+if __name__ == "__main__":
+    main()
