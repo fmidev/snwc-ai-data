@@ -56,6 +56,7 @@ def param_to_id(param):
         "v": (0, 2, 3, "NULL"),
         "z": (0, 3, 4, "NULL"),
         "tcc": (0, 6, 192, "NULL"),
+        "tp": (0, 1, 8, 1),
     }
 
     try:
