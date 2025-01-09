@@ -1,6 +1,6 @@
 ## NWCSAF Effective cloudiness based total cloud cover analysis for MEPS domain
 [NWCSAF Effective cloudiness](https://www.nwcsaf.org/ctth_description#2.-%20CTTH%20algorithm%20summary%20description) based total cloud cover (tcc) data is used to produce the operational tcc nowcast [Cloudcast](https://github.com/fmidev/cloudcast/tree/main) at FMI. 
-Since the geostationary satellite-based product has quality issues at northern latitudes, additional processing has been applied to improve data quality. Similar processing, as used in Cloudcast production, is now applied to archive data to create a TCC analysis that can be used as training data.
+Since the geostationary satellite-based product has quality issues at northern latitudes, additional processing has been applied to improve data quality. Similar processing, as used in Cloudcast production, is now applied to archive data to create a tcc analysis that can be used as training data.
 
 #### Output data specifications
 - Domain & resolution: MEPS (MEPS25D) northern europe in lambert conformal conic projection, 2.5 km grid
@@ -16,7 +16,7 @@ Data sources used to correct NWCSAF effective cloudiness data
 | NWCSAF effective cloudiness | 2018-11-01T00:00  | 2024-09-30T23:45 | 15min | FMI archive |
 | NWCSAF cloud top temperature | 2018-11-01T00:00 | 2024-09-30T23:45 | 15min | FMI archive |
 | MEPS low, medium, high cloud cover | 2021-09-14T22:00 | 2024-12... | 1h | Arcus archive |
-| MEPS 2m relative humidity | 2021-04-01T00:00  | 2024-12... | FMI archive, data corrected by synop observations |
+| MEPS 2m relative humidity | 2021-04-01T00:00  | 2024-12... | 1h | FMI archive, data corrected by synop observations |
 | ECMWF short wave radiation | 2020-02-05T00:00  | 2024-10-01T00:00 | 1h | FMI archive |
 | Clear sky value of short wave radiation | | | 1h | FMI archive, Data calculated using pvlib Python package |
 
@@ -34,7 +34,8 @@ Data sources used to correct NWCSAF effective cloudiness data
 - Since some corrections are only applied during specific months or times of day, there is jumpiness in the data. 
      
 #### Example
-
+Example from 1.9.2022 where 00utc field has falsely 100% values in large areas and the tcc values drop to 50% when the cumulus cloud correction is active during daytime. 
+![example](20220901_tcc_corr.gif)
 
 
 &nbsp;
