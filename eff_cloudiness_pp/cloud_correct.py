@@ -90,9 +90,7 @@ def main():
     date_series = pd.date_range(start=args.start, end=args.end, freq='D')
     # read srad data
     sr = read_zarr("s3://ecmwf-ssrd-data/ssrd.zarr")
-    #if not os.path.exists(args.output):
-    ## Initialize Zarr store once
-    #template.to_zarr(args.output, mode="w", consolidated=True)
+    
     template = sr.copy(deep=True) # copy template for output data
     template = template.drop_vars("ssrd").assign_coords(time=[])
     template = template.load()
@@ -103,11 +101,8 @@ def main():
     cs = xr.open_zarr("/home/users/hietal/projects/snwc-ai-data/eff_cloudiness_pp/clearsky.zarr")
     # read nwcsaf data (effc, cttp), might have missing times!
     nwcsaf = read_zarr("s3://nwcsaf-archive-data/nwcsaf.zarr")
-    #print("DS output",nwcsaf)
-    # s3 template
     s3_rh = "s3://meps-ai-data/meps/{year}/{month}/{dd}/{timedate}_rcorr_heightAboveGround_2.grib2"
     
-    cloud = []
     for day in date_series:
         print(day)
         year = day.strftime("%Y")
@@ -157,6 +152,8 @@ def main():
                     effc_tmp[(effc_tmp <= 90) & (avg1 > 65)] = 90
                     effc_tmp[(effc_tmp <= 90) & (avg2 > 55)] = 90
                     # reduce cloud cover if just high level clouds
+                    effc_tmp[(effc_tmp > 80) & (nh_tmp > 50) & (nl_tmp < 20) & (nm_tmp < 20)] = 80
+                    # add cloud if meps_nl or rh has high values "add stratus"
                     # if (effc <10  && rh >= 86 and (nl > 80 or cmqc == 24) {effc = 60 }
                     effc_tmp[(effc_tmp < 10) & (rh_tmp >= 86) & (nl_tmp > 80)] = 60
                     # if (effc <=60  && rh >= 98 and (nl > 20 or cmqc == 24 ) {pilvi = 80 }  
@@ -172,7 +169,7 @@ def main():
                     # reduce if just high level clouds
                     effc_tmp[(effc_tmp > 50) & (nh_tmp > 50) & (nl_tmp < 20) & (nm_tmp < 20)] = 50
                     # average out the small gaps in data
-                    effc_tmp[(effc_tmp <= 80) & (avg2 > 60)] = 60
+                    effc_tmp[(effc_tmp <= 80) & (avg2 > 60)] = 80
                     effc_tmp[(effc_tmp <= 70) & (avg1 > 50)] = 70
                     # reduce cloud cover if cumulus in midday
                     if (hour >= 7 and hour < 17): 
@@ -182,7 +179,8 @@ def main():
                         sr_ratio[valid_mask] = sr_tmp[valid_mask] / cs_tmp[valid_mask]
                         effc_tmp[(sr_ratio >= 0.65) & (effc_tmp > 80)] = 80
                         effc_tmp[(sr_ratio >= 0.75) & (effc_tmp > 50)] = 50
-                #plot_single_border(effc_tmp, lats, lons, "effc_pp", timehour, 0, 100, 60, 70, 20, 33)        
+                #plot_single_border(effc_tmp, lats, lons, "effc_pp", timehour, 0, 100, 60, 70, 20, 33)
+                #plot_single_border(effc_tmp, lats, lons, "effc_pp", timehour, 0, 100)         
                 #plot_single_field(effc_tmp, "effc_pp", timehour, template, 0, 100)   
                 ###plot_two_border(effc_copy, effc_tmp, lats, lons, "effc", "effc_pp", timehour, 0, 100, 60, 70, 20, 33)
                 # data start time "reference time"
