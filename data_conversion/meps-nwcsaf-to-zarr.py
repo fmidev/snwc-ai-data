@@ -9,6 +9,7 @@ import xarray as xr
 import rioxarray
 import rasterio
 import cartopy
+import time
 from rasterio.session import AWSSession
 from tqdm import tqdm
 from scipy.interpolate import interpn
@@ -63,7 +64,7 @@ def parse_args():
         "--input-size",
         type=parse_size,
         default=(224, 224),
-        help="size of target grid, width_x_height. Default: 224x224",
+        help="size of target grid, width_x_height. Default: 224x224, 475x535 is common also",
     )
     parser.add_argument(
         "--start-datetime",
