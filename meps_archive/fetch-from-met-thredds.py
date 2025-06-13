@@ -208,6 +208,7 @@ def param_to_id(param):
         "air_temperature_2m": (1, 0, 0, 0, None),
         "air_temperature_pl": (1, 0, 0, 0, None),
         "geopotential_pl": (1, 0, 3, 4, None),
+        "surface_geopotential": (1, 0, 3, 4, None),
         "relative_humidity_2m": (1, 0, 1, 192, None),
         "relative_humidity_pl": (1, 0, 1, 192, None),
         "x_wind_10m": (1, 0, 2, 2, None),
@@ -220,6 +221,37 @@ def param_to_id(param):
         "surface_air_pressure": (1, 0, 3, 0, None),
         "specific_humidity_pl": (1, 0, 1, 0, None),
         "upward_air_velocity_pl": (1, 0, 2, 9, None),
+        "turbulent_kinetic_energy_pl": (1, 0, 19, 11, None),
+        "cloud_top_altitude": (1, 0, 6, 12, None),
+        "cloud_base_altitude": (1, 0, 6, 11, None),
+        "precipitation_amount_acc": (11, 0, 1, 8, 0),
+        "mass_fraction_of_cloud_condensed_water_in_air_pl": (1, 0, 1, 83, None),
+        "mass_fraction_of_cloud_ice_in_air_pl": (1, 0, 1, 84, None),
+        "mass_fraction_of_rain_in_air_pl": (1, 0, 1, 85, None),
+        "mass_fraction_of_snow_in_air_pl": (1, 0, 1, 86, None),
+        "mass_fraction_of_graupel_in_air_pl": (1, 0, 1, 32, None),
+        "cloud_area_fraction": (1, 0, 6, 32, None),
+        "high_type_cloud_area_fraction": (1, 0, 6, 196, None),
+        "medium_type_cloud_area_fraction": (1, 0, 6, 195, None),
+        "low_type_cloud_area_fraction": (1, 0, 6, 194, None),
+        "integral_of_surface_downwelling_shortwave_flux_in_air_wrt_time": (
+            11,
+            0,
+            4,
+            3,
+            0,
+        ),
+        "integral_of_surface_downwelling_longwave_flux_in_air_wrt_time": (
+            11,
+            0,
+            5,
+            4,
+            0,
+        ),
+        "specific_convective_available_potential_energy": (1, 0, 7, 6, None),
+        "visibility_in_air": (1, 0, 19, 0, None),
+        "precipitation_type": (1, 0, 1, 19, None),
+        "lightning_index": (1, 0, 17, 192, None),
     }
 
     return params[param]
@@ -234,6 +266,7 @@ def level_type_to_id(level_type):
         "height2": 103,
         "height6": 103,
         "height7": 103,
+        "surface": 103,
     }
 
     return levels[level_type]
@@ -259,7 +292,7 @@ def bits_per_value(param):
 def common_param_name(param):
     if param in ("air_temperature_pl", "air_temperature_2m", "air_temperature_0m"):
         return "t"
-    if param == "geopotential_pl":
+    if param in ["surface_geopotential", "geopotential_pl"]:
         return "z"
     if param in ("relative_humidity_pl", "relative_humidity_2m"):
         return "r"
@@ -275,12 +308,54 @@ def common_param_name(param):
         return "pres"
     if param in ("specific_humidity_pl", "specific_humidity_2m"):
         return "q"
+    if param == "cloud_top_altitude":
+        return "cdct"
+    if param == "cloud_base_altitude":
+        return "cdcb"
+    if param == "precipitation_amount_acc":
+        return "tp"
+    if param == "upward_air_velocity_pl":
+        return "w"
+    if param == "snowfall_amount_acc":
+        return "sf"
+    if param == "turbulent_kinetic_energy_pl":
+        return "tke"
+    if param == "mass_fraction_of_cloud_condensed_water_in_air_pl":
+        return "cldwat"
+    if param == "mass_fraction_of_cloud_ice_in_air_pl":
+        return "cldice"
+    if param == "mass_fraction_of_rain_in_air_pl":
+        return "rainmr"
+    if param == "mass_fraction_of_snow_in_air_pl":
+        return "snowmr"
+    if param == "mass_fraction_of_graupel_in_air_pl":
+        return "graupelmr"
+    if param == "cloud_area_fraction":
+        return "tcc"
+    if param == "high_type_cloud_area_fraction":
+        return "hcc"
+    if param == "medium_type_cloud_area_fraction":
+        return "mcc"
+    if param == "low_type_cloud_area_fraction":
+        return "lcc"
+    if param == "integral_of_surface_downwelling_shortwave_flux_in_air_wrt_time":
+        return "ssrd"
+    if param == "integral_of_surface_downwelling_longwave_flux_in_air_wrt_time":
+        return "strd"
+    if param == "specific_convective_available_potential_energy":
+        return "cape"
+    if param == "visibility_in_air":
+        return "vis"
+    if param == "precipitation_type":
+        return "ptype"
+    if param == "lightning_index":
+        return "li"
 
 
 def common_level_name(level):
     if level == "pressure":
         return "isobaricInhPa"
-    if level in ("height0", "height1", "height2", "height6", "height7"):
+    if level in ("height0", "height1", "height2", "height6", "height7", "surface"):
         return "heightAboveGround"
     if level == "height_above_msl":
         return "heightAboveSea"
@@ -351,7 +426,7 @@ def create_url():
             for lt in args.leadtimes:
                 yield "time[{}:1:{}]".format(lt, lt), lt, lt
 
-    filetype = "nc" if args.year < 2024 else "ncml"
+    filetype = "nc" if args.year < 2024 else "nc"
     for time, lt_b, lt_e in get_time():
         # for i, lt in enumerate(args.leadtimes):
         # time = "time[{}:1:{}]".format(lt, lt)
@@ -432,6 +507,7 @@ def convert_dataset(ds):
     d_level = ds[args.level]
     d_time = ds["time"]
     d_analysis_time = ds["forecast_reference_time"]
+    d_fill_value = ds[args.param]._FillValue
 
     shp = d_data.shape
 
@@ -452,10 +528,10 @@ def convert_dataset(ds):
         else:
             values = d_data[i, 0, :, :].flatten()
 
-        convert_to_grib(vt, level_value, member_value, nx, ny, values)
+        convert_to_grib(vt, level_value, member_value, nx, ny, values, d_fill_value)
 
 
-def convert_to_grib(validtime, level_value, member_value, nx, ny, values):
+def convert_to_grib(validtime, level_value, member_value, nx, ny, values, d_fill_value):
     pdtn, dis, cat, num, tosp = param_to_id(args.param)
 
     year = int(validtime.strftime("%Y"))
@@ -508,6 +584,11 @@ def convert_to_grib(validtime, level_value, member_value, nx, ny, values):
     ecc.codes_set(grib, "packingType", "grid_ccsds")
     ecc.codes_set(grib, "PVPresent", 1)
     ecc.codes_set_array(grib, "pv", pv())
+
+    if d_fill_value is not None:
+        ecc.codes_set(grib, "bitmapPresent", 1)
+        ecc.codes_set(grib, "missingValue", d_fill_value)
+
     ecc.codes_set_values(grib, values)
 
     if pdtn == 11:
