@@ -258,6 +258,7 @@ def param_to_id(param):
         "visibility_in_air": (1, 0, 19, 0, None),
         "precipitation_type": (1, 0, 1, 19, None),
         "lightning_index": (1, 0, 17, 192, None),
+        "snowfall_amount_acc": (11, 0, 1, 53, 0),
     }
 
     return params[param]
@@ -525,7 +526,6 @@ def convert(datas):
         datas = deaccumulate(datas)
 
     for i, ds in enumerate(datas):
-        print("{}/{}".format(i + 1, len(datas)))
         convert_dataset(ds)
 
 
@@ -537,7 +537,6 @@ def convert_dataset(ds):
     d_level = ds[args.level]
     d_time = ds["time"]
     d_analysis_time = ds["forecast_reference_time"].item() / 1_000_000_000
-    d_fill_value = ds[args.param].attrs.get("_FillValue", None)
     shp = d_data.shape
 
     nx = shp[-1]
@@ -558,10 +557,10 @@ def convert_dataset(ds):
         else:
             values = d_data[i, 0, :, :].values.flatten()
 
-        convert_to_grib(vt, level_value, member_value, nx, ny, values, d_fill_value)
+        convert_to_grib(vt, level_value, member_value, nx, ny, values)
 
 
-def convert_to_grib(validtime, level_value, member_value, nx, ny, values, d_fill_value):
+def convert_to_grib(validtime, level_value, member_value, nx, ny, values):
     pdtn, dis, cat, num, tosp = param_to_id(args.param)
 
     year = int(validtime.strftime("%Y"))
@@ -615,9 +614,11 @@ def convert_to_grib(validtime, level_value, member_value, nx, ny, values, d_fill
     ecc.codes_set(grib, "PVPresent", 1)
     ecc.codes_set_array(grib, "pv", pv())
 
-    if d_fill_value is not None:
+    if np.isnan(values).any():
+        print("Found missing values, turning bitmap on")
         ecc.codes_set(grib, "bitmapPresent", 1)
-        ecc.codes_set(grib, "missingValue", d_fill_value)
+        values = np.where(np.isnan(values), -999999, values)
+        ecc.codes_set(grib, "missingValue", -999999)
 
     ecc.codes_set_values(grib, values)
 
