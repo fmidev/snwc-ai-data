@@ -3,13 +3,13 @@
 import argparse
 import sys
 import subprocess
-import netCDF4 as nc
 import eccodes as ecc
 import os
 import numpy as np
 import datetime
 import pytz
 import random
+import xarray as xr
 from nco import Nco
 
 coalesce_times = True
@@ -35,6 +35,12 @@ def parse_args():
     )
     parser.add_argument("--perturbation-number", default=0, type=int)
     parser.add_argument("--use-deterministic-file", action="store_true", default=False)
+    parser.add_argument(
+        "--deaccumulate",
+        action="store_true",
+        default=False,
+        help="deaccumulate precipitation, uses first time as reference time and removes it after done",
+    )
     args = parser.parse_args()
 
     args.leadtimes = list(map(lambda x: int(x), args.leadtimes.split(",")))
@@ -484,7 +490,7 @@ def fetch_from_thredds():
         nco = Nco()
         nco.ncks(input=url, output=tmpfile)  # , options=options)
 
-        datas.append(nc.Dataset(tmpfile, "r"))
+        datas.append(xr.open_dataset(tmpfile, engine="netcdf4"))
         print("Read data from {}".format(url))
 
         os.remove(tmpfile)
@@ -492,7 +498,31 @@ def fetch_from_thredds():
     return datas
 
 
+def deaccumulate(datas):
+    deaccumulated_datas = []
+
+    for i, ds in enumerate(datas):
+        assert len(ds["time"]) >= 2, "Need at least two times to deaccumulate"
+
+        new_times, new_values = [], []
+
+        values = ds[args.param]
+
+        diff_values = values.diff("time")
+
+        new_ds = ds.isel(time=slice(1, None)).copy()
+        new_ds[args.param] = diff_values
+
+        deaccumulated_datas.append(new_ds)
+
+    return deaccumulated_datas
+
+
 def convert(datas):
+
+    if args.deaccumulate:
+        print("Deaccumulating")
+        datas = deaccumulate(datas)
 
     for i, ds in enumerate(datas):
         print("{}/{}".format(i + 1, len(datas)))
@@ -506,9 +536,8 @@ def convert_dataset(ds):
     d_data = ds[args.param]
     d_level = ds[args.level]
     d_time = ds["time"]
-    d_analysis_time = ds["forecast_reference_time"]
-    d_fill_value = ds[args.param]._FillValue
-
+    d_analysis_time = ds["forecast_reference_time"].item() / 1_000_000_000
+    d_fill_value = ds[args.param].attrs.get("_FillValue", None)
     shp = d_data.shape
 
     nx = shp[-1]
@@ -516,17 +545,18 @@ def convert_dataset(ds):
 
     level_value = int(d_level[0])
     member_value = args.perturbation_number
-    at = datetime.datetime.fromtimestamp(int(d_analysis_time[0])).astimezone(pytz.utc)
 
+    at = datetime.datetime.fromtimestamp(int(d_analysis_time)).astimezone(pytz.utc)
     for i, vt in enumerate(d_time):
+        vt = vt.item() / 1_000_000_000  # convert to seconds
         vt = datetime.datetime.fromtimestamp(int(vt)).astimezone(pytz.utc)
 
         # level and possible ensemble member dimension value is always
         # zero as each data set is queried separately
         if len(d_data.shape) == 5:
-            values = d_data[i, 0, 0, :, :].flatten()
+            values = d_data[i, 0, 0, :, :].values.flatten()
         else:
-            values = d_data[i, 0, :, :].flatten()
+            values = d_data[i, 0, :, :].values.flatten()
 
         convert_to_grib(vt, level_value, member_value, nx, ny, values, d_fill_value)
 
