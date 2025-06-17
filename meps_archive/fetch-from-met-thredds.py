@@ -435,8 +435,6 @@ def create_url():
 
     filetype = "nc" if args.year < 2024 else "nc"
     for time, lt_b, lt_e in get_time():
-        # for i, lt in enumerate(args.leadtimes):
-        # time = "time[{}:1:{}]".format(lt, lt)
         for i, level_value in enumerate(args.level_values):
             lev_index = level_value_to_index(args.level, level_value)
             lev = "{}[{}:1:{}]".format(args.level, lev_index, lev_index)
@@ -510,7 +508,8 @@ def deaccumulate(datas):
         values = ds[args.param]
 
         diff_values = values.diff("time")
-
+        # note: we clip the values to ensure no negative values
+        diff_values = np.clip(diff_values, 0, None)
         new_ds = ds.isel(time=slice(1, None)).copy()
         new_ds[args.param] = diff_values
 
@@ -521,8 +520,15 @@ def deaccumulate(datas):
 
 def convert(datas):
 
-    if args.deaccumulate:
-        print("Deaccumulating")
+    deaccumulated_params = [
+        "precipitation_amount_acc",
+        "snowfall_amount_acc",
+        "integral_of_surface_downwelling_longwave_flux_in_air_wrt_time",
+        "integral_of_surface_downwelling_shortwave_flux_in_air_wrt_time",
+    ]
+
+    if args.deaccumulate or args.param in deaccumulated_params:
+        print(f"Deaccumulating {args.param}")
         datas = deaccumulate(datas)
 
     for i, ds in enumerate(datas):
@@ -530,9 +536,6 @@ def convert(datas):
 
 
 def convert_dataset(ds):
-    # float32 air_temperature_pl(time, pressure, ensemble_member, y, x)
-    # float32 air_temperature_2m(time, height1, y, x)
-
     d_data = ds[args.param]
     d_level = ds[args.level]
     d_time = ds["time"]
@@ -550,8 +553,6 @@ def convert_dataset(ds):
         vt = vt.item() / 1_000_000_000  # convert to seconds
         vt = datetime.datetime.fromtimestamp(int(vt)).astimezone(pytz.utc)
 
-        # level and possible ensemble member dimension value is always
-        # zero as each data set is queried separately
         if len(d_data.shape) == 5:
             values = d_data[i, 0, 0, :, :].values.flatten()
         else:
