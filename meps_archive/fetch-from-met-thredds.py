@@ -378,6 +378,12 @@ def get_dodsname():
             "Data at this data is not in MEPS2500D domain; try to start with 2020-02-05"
         )
 
+    if (args.year == 2023 and args.month >= 10) or args.year >= 2024:
+        dodsname = "meps_det_pl" if args.level == "pressure" else "meps_det_sfc"
+        no_member = True
+
+        return dodsname, no_member
+
     if args.use_deterministic_file or (
         args.perturbation_number == 0
         and (
@@ -433,7 +439,10 @@ def create_url():
             for lt in args.leadtimes:
                 yield "time[{}:1:{}]".format(lt, lt), lt, lt
 
-    filetype = "nc" if args.year < 2024 else "nc"
+    filetype = "nc"
+
+    if (args.year == 2023 and args.month >= 10) or args.year >= 2024:
+        filetype = "ncml"
     for time, lt_b, lt_e in get_time():
         for i, level_value in enumerate(args.level_values):
             lev_index = level_value_to_index(args.level, level_value)
