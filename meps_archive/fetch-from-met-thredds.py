@@ -45,7 +45,11 @@ def parse_args():
 
     args.leadtimes = list(map(lambda x: int(x), args.leadtimes.split(",")))
     args.leadtimes.sort()
-    args.level_values = list(map(lambda x: int(x), args.level_values.split(",")))
+
+    if args.level == "hybrid" and args.level_values == "ALL":
+        args.level_values = list(range(1, 66))
+    else:
+        args.level_values = list(map(lambda x: int(x), args.level_values.split(",")))
 
     if args.merge and args.output_filename is None:
         print("Output filename must be specified when merging files")
@@ -213,20 +217,25 @@ def param_to_id(param):
         "air_temperature_0m": (1, 0, 0, 0, None),
         "air_temperature_2m": (1, 0, 0, 0, None),
         "air_temperature_pl": (1, 0, 0, 0, None),
+        "air_temperature_ml": (1, 0, 0, 0, None),
         "geopotential_pl": (1, 0, 3, 4, None),
         "surface_geopotential": (1, 0, 3, 4, None),
         "relative_humidity_2m": (1, 0, 1, 192, None),
         "relative_humidity_pl": (1, 0, 1, 192, None),
         "x_wind_10m": (1, 0, 2, 2, None),
         "x_wind_pl": (1, 0, 2, 2, None),
+        "x_wind_ml": (1, 0, 2, 2, None),
         "y_wind_10m": (1, 0, 2, 3, None),
         "y_wind_pl": (1, 0, 2, 3, None),
+        "y_wind_ml": (1, 0, 2, 3, None),
         "atmosphere_boundary_layer_thickness": (1, 0, 19, 3, None),
         "wind_speed_of_gust": (11, 0, 2, 22, 2),
         "air_pressure_at_sea_level": (1, 0, 3, 0, None),
         "surface_air_pressure": (1, 0, 3, 0, None),
         "specific_humidity_pl": (1, 0, 1, 0, None),
+        "specific_humidity_ml": (1, 0, 1, 0, None),
         "upward_air_velocity_pl": (1, 0, 2, 9, None),
+        "upward_air_velocity_ml": (1, 0, 2, 9, None),
         "turbulent_kinetic_energy_pl": (1, 0, 19, 11, None),
         "cloud_top_altitude": (1, 0, 6, 12, None),
         "cloud_base_altitude": (1, 0, 6, 11, None),
@@ -237,6 +246,7 @@ def param_to_id(param):
         "mass_fraction_of_snow_in_air_pl": (1, 0, 1, 86, None),
         "mass_fraction_of_graupel_in_air_pl": (1, 0, 1, 32, None),
         "cloud_area_fraction": (1, 0, 6, 32, None),
+        "cloud_area_fraction_ml": (1, 0, 6, 32, None),
         "high_type_cloud_area_fraction": (1, 0, 6, 196, None),
         "medium_type_cloud_area_fraction": (1, 0, 6, 195, None),
         "low_type_cloud_area_fraction": (1, 0, 6, 194, None),
@@ -259,6 +269,7 @@ def param_to_id(param):
         "precipitation_type": (1, 0, 1, 19, None),
         "lightning_index": (1, 0, 17, 192, None),
         "snowfall_amount_acc": (11, 0, 1, 53, 0),
+        "lwe_thickness_of_atmosphere_mass_content_of_water_vapor": (1, 0, 1, 64, None),
     }
 
     return params[param]
@@ -274,6 +285,7 @@ def level_type_to_id(level_type):
         "height6": 103,
         "height7": 103,
         "surface": 103,
+        "hybrid": 105,
     }
 
     return levels[level_type]
@@ -297,15 +309,20 @@ def bits_per_value(param):
 
 
 def common_param_name(param):
-    if param in ("air_temperature_pl", "air_temperature_2m", "air_temperature_0m"):
+    if param in (
+        "air_temperature_pl",
+        "air_temperature_2m",
+        "air_temperature_0m",
+        "air_temperature_ml",
+    ):
         return "t"
     if param in ["surface_geopotential", "geopotential_pl"]:
         return "z"
     if param in ("relative_humidity_pl", "relative_humidity_2m"):
         return "r"
-    if param in ("x_wind_pl", "x_wind_10m"):
+    if param in ("x_wind_pl", "x_wind_10m", "x_wind_ml"):
         return "u"
-    if param in ("y_wind_pl", "y_wind_10m"):
+    if param in ("y_wind_pl", "y_wind_10m", "y_wind_ml"):
         return "v"
     if param == "atmosphere_boundary_layer_thickness":
         return "mld"
@@ -313,7 +330,11 @@ def common_param_name(param):
         return "fg"
     if param in ("surface_air_pressure", "air_pressure_at_sea_level"):
         return "pres"
-    if param in ("specific_humidity_pl", "specific_humidity_2m"):
+    if param in (
+        "specific_humidity_pl",
+        "specific_humidity_2m",
+        "specific_humidity_ml",
+    ):
         return "q"
     if param == "cloud_top_altitude":
         return "cdct"
@@ -321,7 +342,7 @@ def common_param_name(param):
         return "cdcb"
     if param == "precipitation_amount_acc":
         return "tp"
-    if param == "upward_air_velocity_pl":
+    if param in ("upward_air_velocity_pl", "upward_air_velocity_ml"):
         return "w"
     if param == "snowfall_amount_acc":
         return "sf"
@@ -337,8 +358,10 @@ def common_param_name(param):
         return "snowmr"
     if param == "mass_fraction_of_graupel_in_air_pl":
         return "graupelmr"
-    if param == "cloud_area_fraction":
+    if param in ("cloud_area_fraction",):
         return "tcc"
+    if param in ("cloud_area_fraction_ml",):
+        return "cc"
     if param == "high_type_cloud_area_fraction":
         return "hcc"
     if param == "medium_type_cloud_area_fraction":
@@ -357,6 +380,8 @@ def common_param_name(param):
         return "ptype"
     if param == "lightning_index":
         return "li"
+    if param == "lwe_thickness_of_atmosphere_mass_content_of_water_vapor":
+        return "tcwv"
 
 
 def common_level_name(level):
@@ -366,6 +391,8 @@ def common_level_name(level):
         return "heightAboveGround"
     if level == "height_above_msl":
         return "heightAboveSea"
+    if level == "hybrid":
+        return "hybrid"
 
 
 def get_dodsname():
@@ -444,23 +471,27 @@ def create_url():
     if (args.year == 2023 and args.month >= 10) or args.year >= 2024:
         filetype = "ncml"
     for time, lt_b, lt_e in get_time():
-        for i, level_value in enumerate(args.level_values):
-            lev_index = level_value_to_index(args.level, level_value)
-            lev = "{}[{}:1:{}]".format(args.level, lev_index, lev_index)
 
-            if no_member:
-                # time, level, nj, ni
-                par = "{}[{}:1:{}][{}:1:{}][0:1:{}][0:1:{}]".format(
-                    args.param, lt_b, lt_e, lev_index, lev_index, nj, ni
-                )
-                memb = ""
+        # surface and pressure: fetch each level individually
+        # hybrid: coalesce all levels in one request
 
-            else:
-                # time, level, member, nj, ni
-                par = "{}[{}:1:{}][{}:1:{}][{}:1:{}][0:1:{}][0:1:{}]".format(
-                    args.param, lt_b, lt_e, lev_index, lev_index, member, member, nj, ni
-                )
-                memb = ",ensemble_member[{}:1:{}]".format(member, member)
+        if args.level == "hybrid":
+            print("Coalesced levels {} to single request".format(args.level_values))
+            lev = f"hybrid[{args.level_values[0]-1}:1:{args.level_values[-1]-1}]"
+
+            # time, level, nj, ni
+            par = "{}[{}:1:{}][{}:1:{}][0:1:{}][0:1:{}]".format(
+                args.param,
+                lt_b,
+                lt_e,
+                args.level_values[0] - 1,
+                args.level_values[-1] - 1,
+                nj,
+                ni,
+            )
+
+            assert no_member, "Hybrid levels only available in deterministic file"
+            memb = ""
 
             url = "https://thredds.met.no/thredds/dodsC/{}/{}/{:02d}/{:02d}/{}_{}{:02d}{:02d}T{:02d}Z.{}?forecast_reference_time,projection_lambert,{},{}{},{},{}".format(
                 archive,
@@ -481,6 +512,53 @@ def create_url():
             )
 
             yield url
+
+        else:
+            for i, level_value in enumerate(args.level_values):
+                lev_index = level_value_to_index(args.level, level_value)
+                lev = "{}[{}:1:{}]".format(args.level, lev_index, lev_index)
+
+                if no_member:
+                    # time, level, nj, ni
+                    par = "{}[{}:1:{}][{}:1:{}][0:1:{}][0:1:{}]".format(
+                        args.param, lt_b, lt_e, lev_index, lev_index, nj, ni
+                    )
+                    memb = ""
+
+                else:
+                    # time, level, member, nj, ni
+                    par = "{}[{}:1:{}][{}:1:{}][{}:1:{}][0:1:{}][0:1:{}]".format(
+                        args.param,
+                        lt_b,
+                        lt_e,
+                        lev_index,
+                        lev_index,
+                        member,
+                        member,
+                        nj,
+                        ni,
+                    )
+                    memb = ",ensemble_member[{}:1:{}]".format(member, member)
+
+                url = "https://thredds.met.no/thredds/dodsC/{}/{}/{:02d}/{:02d}/{}_{}{:02d}{:02d}T{:02d}Z.{}?forecast_reference_time,projection_lambert,{},{}{},{},{}".format(
+                    archive,
+                    args.year,
+                    args.month,
+                    args.day,
+                    dodsname,
+                    args.year,
+                    args.month,
+                    args.day,
+                    cycle,
+                    filetype,
+                    coord,
+                    lev,
+                    memb,
+                    time,
+                    par,
+                )
+
+                yield url
 
 
 def fetch_from_thredds():
@@ -554,7 +632,11 @@ def convert_dataset(ds):
     nx = shp[-1]
     ny = shp[-2]
 
-    level_value = int(d_level[0])
+    if args.level == "hybrid":
+        level_values = args.level_values  # list(range(1, 66))
+    else:
+        level_values = [int(d_level[0])]
+
     member_value = args.perturbation_number
 
     at = datetime.datetime.fromtimestamp(int(d_analysis_time)).astimezone(pytz.utc)
@@ -562,12 +644,13 @@ def convert_dataset(ds):
         vt = vt.item() / 1_000_000_000  # convert to seconds
         vt = datetime.datetime.fromtimestamp(int(vt)).astimezone(pytz.utc)
 
-        if len(d_data.shape) == 5:
-            values = d_data[i, 0, 0, :, :].values.flatten()
-        else:
-            values = d_data[i, 0, :, :].values.flatten()
+        for j, lv in enumerate(level_values):
+            if len(d_data.shape) == 5:
+                values = d_data[i, j, 0, :, :].values.flatten()
+            else:
+                values = d_data[i, j, :, :].values.flatten()
 
-        convert_to_grib(vt, level_value, member_value, nx, ny, values)
+            convert_to_grib(vt, lv, member_value, nx, ny, values)
 
 
 def convert_to_grib(validtime, level_value, member_value, nx, ny, values):
@@ -666,6 +749,7 @@ def convert_to_grib(validtime, level_value, member_value, nx, ny, values):
     open_mode = "ab" if args.merge else "wb"
     with open(filename, open_mode) as fp:
         ecc.codes_write(grib, fp)
+        print("Wrote {}".format(filename))
 
 
 datas = fetch_from_thredds()
