@@ -406,7 +406,12 @@ def get_dodsname():
         )
 
     if (args.year == 2023 and args.month >= 10) or args.year >= 2024:
-        dodsname = "meps_det_pl" if args.level == "pressure" else "meps_det_sfc"
+        dodsname = "meps_det_sfc"
+        if args.level == "pressure":
+            dodsname = "meps_det_pl"
+        elif args.level == "hybrid":
+            dodsname = "meps_det_ml"
+
         no_member = True
 
         return dodsname, no_member
@@ -429,7 +434,12 @@ def get_dodsname():
     if args.use_deterministic_file or (
         args.perturbation_number == 0 and args.year >= 2024
     ):
-        dodsname = "meps_det_pl" if args.level == "pressure" else "meps_det_sfc"
+        dodsname = "meps_det_sfc"
+        if args.level == "pressure":
+            dodsname = "meps_det_pl"
+        elif args.level == "hybrid":
+            dodsname = "meps_det_ml"
+
         no_member = True
 
     return dodsname, no_member
