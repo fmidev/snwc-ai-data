@@ -463,14 +463,25 @@ def create_url():
     cycle = args.cycle
     member = args.perturbation_number
 
-    if coalesce_times:
-        print("Coalescing times {} to single request".format(args.leadtimes))
-
     def get_time():
         if coalesce_times:
-            b = args.leadtimes[0]
-            e = args.leadtimes[-1]
-            yield "time[{}:1:{}]".format(b, e), b, e
+            if args.level == "hybrid" and len(args.leadtimes) > 6:
+                for i in range(0, len(args.leadtimes), 6):
+                    b = args.leadtimes[i]
+                    e = args.leadtimes[min(i + 5, len(args.leadtimes) - 1)]
+                    print(
+                        "Coalescing times {} to single request".format(
+                            np.arange(b, e + 1)
+                        )
+                    )
+                    yield "time[{}:1:{}]".format(b, e), b, e
+            else:
+                b = args.leadtimes[0]
+                e = args.leadtimes[-1]
+                print(
+                    "Coalescing times {} to single request".format(np.arange(b, e + 1))
+                )
+                yield "time[{}:1:{}]".format(b, e), b, e
 
         else:
             for lt in args.leadtimes:
@@ -480,6 +491,7 @@ def create_url():
 
     if (args.year == 2023 and args.month >= 10) or args.year >= 2024:
         filetype = "ncml"
+
     for time, lt_b, lt_e in get_time():
 
         # surface and pressure: fetch each level individually
