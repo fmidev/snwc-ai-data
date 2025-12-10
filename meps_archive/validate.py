@@ -96,7 +96,7 @@ PARAMETER_LIMITS = {
         "allow_zero_std": False,
     },  # m (mixed layer depth)
     "pres": {
-        "min_valid": 18000,
+        "min_valid": 8000,
         "max_valid": 110000,
         "allow_missing": False,
         "allow_zero_std": False,
@@ -233,6 +233,16 @@ PARAMETER_LIMITS = {
     },  # codetable (preform)
 }
 
+exceptions = {
+    "pres": {
+        "level": [1, 2, 3, 4],
+        "min_valid": 100,
+        "max_valid": 9000,
+        "allow_missing": False,
+        "allow_zero_std": True,
+    },  # Pa
+}
+
 
 def extract_parameter_from_filename(filename):
     """Extract parameter name from GRIB2 filename."""
@@ -255,7 +265,7 @@ def validate_grib_file(filepath, datadate):
             "stats": {},
         }
 
-    limits = PARAMETER_LIMITS[parameter]
+    general_limits = PARAMETER_LIMITS[parameter]
     required_message_count = 24  # Expecting 24 messages for each day (hourly data)
     required_datetime_sum = (
         27600  # Sum of dataTime values for 24 hours (0+100+200+...+2300)
@@ -288,9 +298,9 @@ def validate_grib_file(filepath, datadate):
                     f"found {codes_get(gid, 'dataDate')}"
                 )
 
-                # After
+                missing_value = 1e36
+                codes_set(gid, "missingValue", missing_value)
                 values = codes_get_values(gid)
-                missing_value = codes_get(gid, "missingValue")
 
                 # Create mask for missing values (both NaN and the specific missing value)
                 missing_mask = np.isnan(values) | (values == missing_value)
@@ -320,6 +330,17 @@ def validate_grib_file(filepath, datadate):
                     "missing_count": missing_count,
                     "total_count": len(values),
                 }
+
+                try:
+                    local_limits = exceptions[parameter]
+                    level = int(codes_get(gid, "level"))
+                    if level in local_limits["level"]:
+                        limits = local_limits
+                    else:
+                        limits = general_limits
+
+                except KeyError:
+                    limits = general_limits
 
                 # Check minimum value
                 if min_val < limits["min_valid"]:
